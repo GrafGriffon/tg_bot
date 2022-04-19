@@ -1,0 +1,9 @@
+{
+    "require": {
+        "guzzlehttp/guzzle": "^7.4",
+      "ext-json": "*",
+      "ext-curl": "*",
+      "ext-mysqli": "*",
+      "ext-mysql": "*"
+    }
+}
