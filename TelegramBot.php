@@ -13,7 +13,6 @@ class TelegramBot
 
     public function __construct()
     {
-
     }
 
     protected function query($method, $params = [])
@@ -63,14 +62,14 @@ class TelegramBot
                 return $this->getPending();
             }
             if (str_contains($this->infoMessage['text'], "/accept")) {  //accept
-                $number = stristr($this->infoMessage['text'], 6);
+                $number = mb_substr($this->infoMessage['text'], 8);
                 if (!is_numeric($number)) {
                     return $this->getError();
                 }
                 return $this->getAccept($number);
             }
             if (str_contains($this->infoMessage['text'], "/discard")) {  //discard
-                $number = stristr($this->infoMessage['text'], 6);
+                $number = mb_substr($this->infoMessage['text'], 8);
                 if (!is_numeric($number)) {
                     return $this->getError();
                 }
@@ -81,7 +80,7 @@ class TelegramBot
             }
             if (str_contains($this->infoMessage['text'], "/settime")) {  //settime
                 $number = explode(' ', $this->infoMessage['text']);
-                if (count($number) != 3) {
+                if (count($number) < 3) {
                     return $this->getError();
                 }
                 if ($number[0] == "/settime") {
@@ -122,21 +121,17 @@ class TelegramBot
         } else {
             return $this->sendUrl();
         }
-        return $this->query('sendMessage', [
-            'text' => "Not command",
-            'chat_id' => $this->infoMessage['id']
-        ]);
     }
 
     public function setTime(array $number)
     {
         try {
-            if (key_exists(3, $number)){
-                $date=new DateTime($number[2].' '.$number[3]);
-            } else{
-                $date=new DateTime($number[2]);
+            if (key_exists(4, $number)) {
+                $date = new DateTime($number[3] . ' ' . $number[4]);
+            } else {
+                $date = new DateTime($number[3]);
             }
-        } catch (Exception $e){
+        } catch (Exception $e) {
             return $this->getError();
         }
         $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
@@ -145,12 +140,11 @@ FROM `watch_together_sessions`
          JOIN watch_together_sessions w on watch_together_sessions.user_id = w.mate_user_id AND watch_together_sessions.movie_id=w.movie_id
          JOIN users u on u.user_id = watch_together_sessions.user_id
          JOIN users l on l.user_id = watch_together_sessions.mate_user_id
-WHERE u.tg_id ='" . $this->infoMessage['id'] . "' and (w.watch_together_session_id='" . $number . "' 
-or watch_together_sessions.watch_together_session_id='" . $number . "')";
+WHERE u.tg_id ='" . $this->infoMessage['id'] . "' and watch_together_sessions.watch_together_session_id='" . $number[2] . "'";
         $local = mysqli_fetch_all(mysqli_query($connect, $sql));
         if (count($local) > 0) {
             foreach ($local as $element) {
-                $sql = "UPDATE watch_together_sessions SET start_datetime='" . $date . "' WHERE watch_together_session_id='" . $element[0] . "' OR watch_together_session_id='" . $element[1] . "'";
+                $sql = "UPDATE watch_together_sessions SET start_datetime='" . $date->format('Y-m-d H:i:s') . "' WHERE watch_together_session_id='" . $element[0] . "' OR watch_together_session_id='" . $element[1] . "'";
                 mysqli_query($connect, $sql);
             }
             $this->query('sendMessage', [
@@ -179,8 +173,28 @@ or watch_together_sessions.watch_together_session_id='" . $number . "')";
         if (count($local) > 0) {
             foreach ($local as $element) {
                 mysqli_query($connect, "DELETE FROM `watch_together_sessions` WHERE watch_together_session_id='" . $element[0] . "' OR watch_together_session_id='" . $element[1] . "'");
-                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[4] . "', " . $element[2] . ", " . "'" . $element[3] . "'" . ")");
-                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[3] . "', " . $element[2] . ", " . "'" . $element[4] . "'" . ")");
+                $sql = "SELECT *
+FROM `watch_together_requests`
+WHERE is_active = 1
+  AND movie_id = '" . $element[2] . "'
+  AND '" . $element[4] . "' NOT IN
+      (SELECT watch_together_request_ignores.user_id
+       FROM `watch_together_request_ignores`
+       WHERE movie_id = '" . $element[2] . "'
+         AND ignore_user_id != '" . $element[4] . "')";
+                $result=mysqli_fetch_all(mysqli_query($connect, $sql));
+                if (count($result)>0) {
+                    foreach ($result as $item) {
+                        var_dump($item);
+                        mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[4] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $element[4] . "', '" . $element[2] . "', " . $item[1] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $item[1] . "', '" . $element[2] . "', " . $element[4] . ", false)");
+                        break;
+                    }
+                } else {
+                    mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[4] . ", true)");
+                }
+                var_dump($element);
             }
             $this->query('sendMessage', [
                 'text' => "Success",
@@ -280,10 +294,57 @@ FROM `watch_together_offers`
          JOIN users l on l.user_id = watch_together_offers.offered_user_id
 WHERE u.tg_id ='" . $this->infoMessage['id'] . "' AND (w.watch_together_offer_id='" . $number . "' or watch_together_offers.watch_together_offer_id='" . $number . "')";
             foreach (mysqli_fetch_all(mysqli_query($connect, $sql)) as $element) {
-                mysqli_query($connect, "DELETE FROM `watch_together_offers` WHERE tg_id='" . $element[0] . "' OR tg_id='" . $element[1] . "'");
-                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[4] . "', " . $element[2] . ", " . "'" . $element[3] . "'" . ")");
-                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[3] . "', " . $element[2] . ", " . "'" . $element[4] . "'" . ")");
+                mysqli_query($connect, "DELETE FROM `watch_together_offers` WHERE watch_together_offer_id='" . $element[0] . "' OR watch_together_offer_id='" . $element[1] . "'");
+                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[4] . "', " . $element[2] . ",'" . $element[3] . "'" . ")");
+                mysqli_query($connect, "INSERT INTO `watch_together_request_ignores` (user_id, movie_id, ignore_user_id) VALUES ('" . $element[3] . "', " . $element[2] . ",'" . $element[4] . "'" . ")");
+
+
+                $sql = "SELECT *
+FROM `watch_together_requests`
+WHERE is_active = 1
+  AND movie_id = '" . $element[2] . "'
+  AND '" . $element[4] . "' NOT IN
+      (SELECT watch_together_request_ignores.user_id
+       FROM `watch_together_request_ignores`
+       WHERE movie_id = '" . $element[2] . "'
+         AND ignore_user_id != '" . $element[4] . "')";
+                $result=mysqli_fetch_all(mysqli_query($connect, $sql));
+                if (count($result)>0) {
+                    foreach ($result as $item) {
+                        var_dump($item);
+                        mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[4] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $element[4] . "', '" . $element[2] . "', " . $item[1] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $item[1] . "', '" . $element[2] . "', " . $element[4] . ", false)");
+                        break;
+                    }
+                } else {
+                    mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[4] . ", true)");
+                }
+
+                $sql = "SELECT *
+FROM `watch_together_requests`
+WHERE is_active = 1
+  AND movie_id = '" . $element[2] . "'
+  AND '" . $element[3] . "' NOT IN
+      (SELECT watch_together_request_ignores.user_id
+       FROM `watch_together_request_ignores`
+       WHERE movie_id = '" . $element[2] . "'
+         AND ignore_user_id != '" . $element[3] . "')";
+                $result=mysqli_fetch_all(mysqli_query($connect, $sql));
+                if (count($result)>0) {
+                    foreach ($result as $item) {
+                        var_dump($item);
+                        mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[3] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $element[3] . "', '" . $element[2] . "', " . $item[1] . ", false)");
+                        mysqli_query($connect, "INSERT INTO `watch_together_offers` (user_id, movie_id, offered_user_id, is_accepted) VALUES ('" . $item[1] . "', '" . $element[2] . "', " . $element[4] . ", false)");
+                        break;
+                    }
+                } else {
+                    mysqli_query($connect, "INSERT INTO `watch_together_requests` (movie_id, user_id, is_active) VALUES ('" . $element[2] . "', " . $element[3] . ", true)");
+                }
             }
+
+
             $this->query('sendMessage', [
                 'text' => "Success",
                 'chat_id' => $this->infoMessage['id']
@@ -308,7 +369,7 @@ FROM `watch_together_offers`
 WHERE u.tg_id ='" . $this->infoMessage['id'] . "' AND watch_together_offers.watch_together_offer_id='" . $number . "'";
         $local = mysqli_fetch_all(mysqli_query($connect, $sql));
         if (count($local) > 0) {
-            if ($local[0][3] == 1) {
+            if ($local[0][2] == 1) {
                 $sql = "SELECT watch_together_offers.watch_together_offer_id, w.watch_together_offer_id, m.movie_id, l.user_id, u.user_id
 FROM `watch_together_offers`
          JOIN watch_together_offers w on watch_together_offers.user_id = w.offered_user_id AND watch_together_offers.movie_id=w.movie_id
@@ -317,7 +378,11 @@ FROM `watch_together_offers`
          JOIN users l on l.user_id = watch_together_offers.offered_user_id
 WHERE u.tg_id ='" . $this->infoMessage['id'] . "' AND (w.watch_together_offer_id='" . $number . "' or watch_together_offers.watch_together_offer_id='" . $number . "')";
                 foreach (mysqli_fetch_all(mysqli_query($connect, $sql)) as $element) {
-                    mysqli_query($connect, "DELETE FROM `watch_together_offers` WHERE tg_id='" . $element[0] . "' OR tg_id='" . $element[1] . "'");
+                    mysqli_query($connect, "DELETE FROM `watch_together_offers` WHERE watch_together_offer_id='" . $element[0] . "' OR watch_together_offer_id='" . $element[1] . "'");
+
+                    mysqli_query($connect, "DELETE FROM `watch_together_requests` WHERE movie_id='" . $element[2] . "' AND (user_id='" . $element[3] . "' OR user_id='" . $element[4] . "')");
+                    mysqli_query($connect, "DELETE FROM `watch_together_request_ignores` WHERE movie_id='" . $element[2] . "' AND (user_id='" . $element[3] . "' OR user_id='" . $element[4] . "')");
+
                     mysqli_query($connect, "INSERT INTO `watch_together_sessions` (user_id, movie_id, mate_user_id) VALUES ('" . $element[4] . "', " . $element[2] . ", " . "'" . $element[3] . "'" . ")");
                     mysqli_query($connect, "INSERT INTO `watch_together_sessions` (user_id, movie_id, mate_user_id) VALUES ('" . $element[3] . "', " . $element[2] . ", " . "'" . $element[4] . "'" . ")");
                 }
