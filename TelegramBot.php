@@ -9,7 +9,10 @@ class TelegramBot
     protected $updateId;
     private const MINUTES = 2;
     private array $infoMessage;
-
+    private const HOST="localhost";
+    private const USER="griffon";
+    private const PASSWORD="Password1!";
+    private const DB="kinopoisk_duo";
 
     public function __construct()
     {
@@ -134,7 +137,7 @@ class TelegramBot
         } catch (Exception $e) {
             return $this->getError();
         }
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT watch_together_sessions.watch_together_session_id, w.watch_together_session_id, watch_together_sessions.movie_id, u.user_id, l.user_id, watch_together_sessions.start_datetime
 FROM `watch_together_sessions`
          JOIN watch_together_sessions w on watch_together_sessions.user_id = w.mate_user_id AND watch_together_sessions.movie_id=w.movie_id
@@ -161,7 +164,7 @@ WHERE u.tg_id ='" . $this->infoMessage['id'] . "' and watch_together_sessions.wa
 
     public function getCancel(int $number): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT watch_together_sessions.watch_together_session_id, w.watch_together_session_id, watch_together_sessions.movie_id, u.user_id, l.user_id, watch_together_sessions.start_datetime
 FROM `watch_together_sessions`
          JOIN watch_together_sessions w on watch_together_sessions.user_id = w.mate_user_id AND watch_together_sessions.movie_id=w.movie_id
@@ -210,7 +213,7 @@ WHERE is_active = 1
 
     public function getFinish(int $number): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT watch_together_sessions.watch_together_session_id, w.watch_together_session_id
 FROM `watch_together_sessions`
          JOIN watch_together_sessions w on watch_together_sessions.user_id = w.mate_user_id AND watch_together_sessions.movie_id=w.movie_id
@@ -245,7 +248,7 @@ or watch_together_sessions.watch_together_session_id='" . $number . "')";
 
     public function getSessions(): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT watch_together_sessions.watch_together_session_id, w.watch_together_session_id, m.title, u.user_id, l.user_id, l.tg_id, l.username, watch_together_sessions.start_datetime
 FROM `watch_together_sessions`
          JOIN watch_together_sessions w on watch_together_sessions.user_id = w.mate_user_id AND watch_together_sessions.movie_id=w.movie_id
@@ -276,7 +279,7 @@ WHERE u.tg_id ='" . $this->infoMessage['id'] . "'";
 
     public function getDiscard(int $number): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT l.tg_id, watch_together_offers.is_accepted, w.is_accepted,
        watch_together_offers.watch_together_offer_id, w.watch_together_offer_id
 FROM `watch_together_offers`
@@ -359,7 +362,7 @@ WHERE is_active = 1
 
     public function getAccept(int $number): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT l.tg_id, watch_together_offers.is_accepted, w.is_accepted,
        watch_together_offers.watch_together_offer_id, w.watch_together_offer_id
 FROM `watch_together_offers`
@@ -408,7 +411,7 @@ WHERE u.tg_id ='" . $this->infoMessage['id'] . "' AND (w.watch_together_offer_id
 
     public function getPending(): void
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT m.title, l.username, l.tg_id, u.username, watch_together_offers.is_accepted, w.is_accepted,
        watch_together_offers.watch_together_offer_id
 FROM `watch_together_offers`
@@ -433,7 +436,7 @@ WHERE u.tg_id ='" . $this->infoMessage['id'] . "'";
      */
     public function addCode(): int
     {
-        $connect = mysqli_connect("localhost", "griffon", "Password1!", "kinopoisk_duo");
+        $connect = mysqli_connect(self::HOST, self::USER, self::PASSWORD, self::DB);
         $sql = "SELECT * FROM `tg_codes` WHERE tg_id='" . $this->infoMessage['id'] . "'";
         if (count(mysqli_fetch_all(mysqli_query($connect, $sql))) != 0) {
             mysqli_query($connect, "DELETE FROM `tg_codes` WHERE tg_id='" . $this->infoMessage['id'] . "'");
